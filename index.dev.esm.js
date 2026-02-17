@@ -269,7 +269,7 @@ var GRi4D = class {
     return itemsRowElement;
   }
   update() {
-    const { gridContainerElement } = this;
+    const { wrapperElement, gridContainerElement } = this;
     const {
       mountPoint,
       groups,
@@ -320,7 +320,7 @@ var GRi4D = class {
         };
         this.visibleGroups.set(groupIndex, renderedGroup);
         if (renderedGroup.headerElement) {
-          gridContainerElement.appendChild(renderedGroup.headerElement);
+          wrapperElement.appendChild(renderedGroup.headerElement);
         }
       }
       const group = groups[groupIndex];
