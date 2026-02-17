@@ -1,0 +1,75 @@
+<!doctype html>
+<html>
+  <head>
+    <title>GRiiiiD - Browser</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      html {
+        background: gray;
+      }
+    </style>
+  </head>
+  <body>
+    <div style="height: 0; background: yellow; position: sticky; top: 0">
+      Browser
+    </div>
+    <div style="position: relative" id="root"></div>
+    <script src="./index.dev.browser.js"></script>
+    <script>
+      const totalItems = 10000;
+      const numGroups = 500;
+
+      const itemsPerGroup = Math.floor(totalItems / numGroups);
+
+      const groups = Array.from({ length: numGroups }).map((_, groupIndex) => ({
+        title: `Group ${groupIndex + 1}`,
+        items: Array.from({ length: itemsPerGroup }).map((_, itemIndex) => ({
+          title: `Item ${groupIndex * itemsPerGroup + itemIndex + 1}`,
+        })),
+      }));
+
+      const numCols = 5;
+      const rowHeight = 200;
+      const groupHeaderHeight = 50;
+      const spacing = 5;
+      const itemRenderer = (item) => {
+        const el = document.createElement("div");
+        el.textContent = item.title;
+        el.style.border = "1px solid #999";
+        el.style.background = "lightblue";
+        el.style.display = "flex";
+        el.style.alignItems = "center";
+        el.style.justifyContent = "center";
+        el.style.flex = "1";
+        el.style.height = "100%";
+        return el;
+      };
+      const groupHeaderRenderer = (group) => {
+        const el = document.createElement("div");
+        el.textContent = group.title;
+        el.style.background = "#eee";
+        el.style.fontWeight = "bold";
+        el.style.padding = "5px 10px";
+        el.style.height = "100%";
+        el.style.boxSizing = "border-box";
+        return el;
+      };
+
+      new GRi4D({
+        viewport: window,
+        mountPoint: document.getElementById("root"),
+        groups,
+        numCols,
+        rowHeight,
+        groupHeaderHeight,
+        spacing,
+        itemRenderer,
+        groupHeaderRenderer,
+      });
+    </script>
+  </body>
+</html>
