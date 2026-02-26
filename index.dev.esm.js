@@ -37,7 +37,8 @@ var VisibleRanges = class {
 var GRi4D = class {
   options;
   wrapperElement;
-  gridContainerElement;
+  gridSizingElement;
+  itemsViewportElement;
   visibleGroups = /* @__PURE__ */ new Map();
   groupVisibleRanges;
   constructor(options) {
@@ -73,11 +74,16 @@ var GRi4D = class {
     }
     const gridHeight = y > 0 ? y + spacing + (vpIsWindow ? 0 : stickyTop) : 0;
     this.groupVisibleRanges = new VisibleRanges(groupVisibleRanges);
-    if (!this.gridContainerElement) {
+    if (!this.gridSizingElement) {
       this.wrapperElement = document.createElement("div");
+      this.wrapperElement.className = "gri4d-wrapper-element";
       this.wrapperElement.style.position = "relative";
-      this.gridContainerElement = document.createElement("div");
-      this.wrapperElement.appendChild(this.gridContainerElement);
+      this.gridSizingElement = document.createElement("div");
+      this.gridSizingElement.className = "gri4d-grid-sizing-element";
+      this.wrapperElement.appendChild(this.gridSizingElement);
+      this.itemsViewportElement = document.createElement("div");
+      this.itemsViewportElement.className = "gri4d-items-viewport-element";
+      this.gridSizingElement.appendChild(this.itemsViewportElement);
     }
     mountPoint.appendChild(this.wrapperElement);
     if (this.getViewportType() === 2 /* Options */) {
@@ -97,12 +103,15 @@ var GRi4D = class {
     } else {
       this.wrapperElement.style = "position: relative";
     }
-    Object.assign(this.gridContainerElement.style, {
+    Object.assign(this.gridSizingElement.style, {
       height: gridHeight + "px",
-      position: "relative",
-      willChange: "clip-path",
-      transform: "translateZ(0)",
-      zIndex: 0
+      position: "relative"
+    });
+    Object.assign(this.itemsViewportElement.style, {
+      overflow: "hidden",
+      position: "sticky",
+      height: "100vh",
+      top: stickyTop + "px"
     });
     clearTimeout(this.resizeTimeout);
     window.removeEventListener("resize", this.onResize);
@@ -111,9 +120,11 @@ var GRi4D = class {
     scrollListener.removeEventListener("scroll", this.onScroll);
     scrollListener.addEventListener("scroll", this.onScroll);
     for (let [groupKey] of this.visibleGroups) {
+      const renderedGroup = this.visibleGroups.get(groupKey);
+      renderedGroup?.headerElement?.remove();
       this.visibleGroups.delete(groupKey);
     }
-    this.gridContainerElement.innerHTML = "";
+    this.itemsViewportElement.innerHTML = "";
     this.update();
   }
   destroy() {
@@ -180,7 +191,7 @@ var GRi4D = class {
     return { top, bottom: top + height };
   }
   getViewportRelativeTop() {
-    const gridBoundRect = this.gridContainerElement.getBoundingClientRect();
+    const gridBoundRect = this.gridSizingElement.getBoundingClientRect();
     if (this.getViewportType() === 0 /* Window */) {
       return gridBoundRect.top;
     }
@@ -195,8 +206,8 @@ var GRi4D = class {
     const groupTotalHeight = groupHeaderHeight + spacing + (rowHeight + spacing) * groupNumRows;
     return groupTotalHeight;
   }
-  createGroupHeaderElement(y, groupIndex) {
-    const { gridContainerElement } = this;
+  createGroupHeaderElement(groupIndex) {
+    const { gridSizingElement } = this;
     const {
       groups,
       numCols,
@@ -208,29 +219,18 @@ var GRi4D = class {
       stickyTop = 0
     } = this.options;
     const group = groups[groupIndex];
-    const groupTotalHeight = this.getGroupTotalHeight(groupIndex);
-    const wrapper = document.createElement("div");
-    wrapper.style = `
-        position: absolute;
-        top: ${y}px;
-        height: ${groupTotalHeight}px;
-        width: 100%;
-        pointerEvents: none;
-        z-index: 1;
-      `;
-    const headerY = gridContainerElement.offsetTop + stickyTop;
     const groupStickyHeader = document.createElement("div");
-    groupStickyHeader.style = `
-      position: sticky;
-      top: ${headerY}px;
-      height: ${groupHeaderHeight}px;
-    `;
+    Object.assign(groupStickyHeader.style, {
+      position: "absolute",
+      height: `${groupHeaderHeight}px`,
+      zIndex: groupIndex + 1,
+      width: "100%"
+    });
     groupStickyHeader.appendChild(groupHeaderRenderer(group, groupIndex));
-    wrapper.appendChild(groupStickyHeader);
-    return wrapper;
+    return groupStickyHeader;
   }
-  createItemsRowElement(y, groupIndex, itemRowIndex) {
-    const { gridContainerElement } = this;
+  createItemsRowElement(groupIndex, itemRowIndex) {
+    const { gridSizingElement } = this;
     const {
       groups,
       rowHeight,
@@ -241,15 +241,14 @@ var GRi4D = class {
       mountPoint
     } = this.options;
     const group = groups[groupIndex];
-    const colWidth = `calc(${100 / numCols}% - ${spacing * ((numCols - 1) / numCols)}px)`;
+    const colWidthPx = `calc(${100 / numCols}% - ${spacing * ((numCols - 1) / numCols)}px)`;
     const itemsRowElement = document.createElement("div");
-    itemsRowElement.style = `
-      position: absolute;
-      transform: translateY(${y}px);
-      height: ${rowHeight}px;
-      width: 100%;
-      display: flex;
-    `;
+    Object.assign(itemsRowElement.style, {
+      position: "absolute",
+      height: `${rowHeight}px`,
+      width: "100%",
+      display: "flex"
+    });
     for (let c = 0; c < numCols; c++) {
       const itemIndex = itemRowIndex * numCols + c;
       if (itemIndex >= group.items.length) {
@@ -258,18 +257,18 @@ var GRi4D = class {
       const item = group.items[itemIndex];
       const data = group.data?.[itemIndex];
       const itemElement = document.createElement("div");
-      itemElement.style = `
-        height: 100%;
-        width: ${colWidth};
-        margin-right: ${c === numCols - 1 ? 0 : spacing}px;
-      `;
+      Object.assign(itemElement.style, {
+        height: "100%",
+        width: colWidthPx,
+        marginRight: `${c === numCols - 1 ? 0 : spacing}px`
+      });
       itemElement.appendChild(itemRenderer(item, itemIndex, data));
       itemsRowElement.appendChild(itemElement);
     }
     return itemsRowElement;
   }
   update() {
-    const { wrapperElement, gridContainerElement } = this;
+    const { wrapperElement, gridSizingElement, itemsViewportElement } = this;
     const {
       mountPoint,
       groups,
@@ -278,8 +277,7 @@ var GRi4D = class {
       spacing,
       stickyTop = 0,
       viewport,
-      numCols,
-      disableClipPath
+      numCols
     } = this.options;
     const vpIsWindow = this.getViewportType() === 0 /* Window */;
     const buffer = Math.max(rowHeight, groupHeaderHeight) + spacing;
@@ -288,12 +286,7 @@ var GRi4D = class {
     const minY = vpRange.top - buffer;
     const maxY = vpRange.bottom + buffer;
     const topDiff = Math.max(0, stickyTop - mountPoint.offsetTop);
-    const clipTop = -top + stickyTop;
-    if (top < stickyTop && !disableClipPath) {
-      gridContainerElement.style.clipPath = `inset(${clipTop}px 0 0 0)`;
-    } else {
-      gridContainerElement.style.clipPath = "";
-    }
+    const vpScrollAmount = Math.max(0, -top + stickyTop) - topDiff - (vpIsWindow ? 0 : stickyTop);
     const firstVisibleGroupIndex = this.groupVisibleRanges.findFirstVisibleIndex(minY);
     const lastVisibleGroupIndex = this.groupVisibleRanges.findLastVisibleIndex(maxY);
     for (const [groupIndex, visibleGroupContent] of this.visibleGroups) {
@@ -312,16 +305,29 @@ var GRi4D = class {
     }
     for (let groupIndex = firstVisibleGroupIndex; groupIndex <= lastVisibleGroupIndex; groupIndex++) {
       let renderedGroup = this.visibleGroups.get(groupIndex);
-      const groupTop = this.groupVisibleRanges.get(groupIndex).top + topDiff + (vpIsWindow ? 0 : stickyTop);
+      const { top: rawGroupTop, bottom: rawGroupBot } = this.groupVisibleRanges.get(groupIndex);
+      const groupTop = rawGroupTop + topDiff + (vpIsWindow ? 0 : stickyTop);
+      let groupHeaderY = Math.max(0, rawGroupTop - vpScrollAmount);
+      let stickyPushOffset = 0;
+      if (rawGroupBot - vpScrollAmount < groupHeaderHeight) {
+        stickyPushOffset = groupHeaderHeight - (rawGroupBot - vpScrollAmount);
+      }
+      let notStuckYetOffset = 0;
+      if (vpScrollAmount < rawGroupTop) {
+        notStuckYetOffset = vpIsWindow ? 0 : topDiff;
+      }
       if (!renderedGroup) {
         renderedGroup = {
-          headerElement: this.createGroupHeaderElement(groupTop, groupIndex),
+          headerElement: this.createGroupHeaderElement(groupIndex),
           visibleItemsRows: /* @__PURE__ */ new Map()
         };
         this.visibleGroups.set(groupIndex, renderedGroup);
         if (renderedGroup.headerElement) {
-          wrapperElement.appendChild(renderedGroup.headerElement);
+          itemsViewportElement.appendChild(renderedGroup.headerElement);
         }
+      }
+      if (renderedGroup.headerElement) {
+        renderedGroup.headerElement.style.transform = `translateY(${groupHeaderY - stickyPushOffset + notStuckYetOffset}px)`;
       }
       const group = groups[groupIndex];
       const totalItemsRows = Math.ceil(group.items.length / numCols);
@@ -349,16 +355,16 @@ var GRi4D = class {
       }
       for (let itemsRowIndex = firstVisibleItemsRowIndex; itemsRowIndex <= lastVisibleItemsRowIndex; itemsRowIndex++) {
         let itemsRowElement = renderedGroup.visibleItemsRows.get(itemsRowIndex);
+        const itemsRowY = itemsRowIndex * (rowHeight + spacing) + groupHeaderHeight + spacing + rawGroupTop - vpScrollAmount;
         if (!itemsRowElement) {
-          const itemsRowY = groupTop + groupHeaderHeight + spacing + itemsRowIndex * (rowHeight + spacing);
           itemsRowElement = this.createItemsRowElement(
-            itemsRowY,
             groupIndex,
             itemsRowIndex
           );
-          gridContainerElement.appendChild(itemsRowElement);
+          itemsViewportElement.appendChild(itemsRowElement);
           renderedGroup.visibleItemsRows.set(itemsRowIndex, itemsRowElement);
         }
+        itemsRowElement.style.transform = `translateY(${itemsRowY}px)`;
       }
     }
   }
