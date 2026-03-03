@@ -1,4 +1,5 @@
 // src/index.ts
+var GRID_SIZER_LIMIT = 8 * 10 ** 6;
 var VisibleRanges = class {
   visibleRanges;
   constructor(visibleRanges) {
@@ -43,6 +44,7 @@ var GRi4D = class {
   groupVisibleRanges;
   viewportSizeObserver = null;
   gridHeight = 0;
+  scrollPosMultiplier = 1;
   constructor(options) {
     this.reset(options);
   }
@@ -76,12 +78,18 @@ var GRi4D = class {
     }
     this.gridHeight = y > 0 ? y + spacing + (vpIsWindow ? topDiff : stickyTop) : 0;
     this.groupVisibleRanges = new VisibleRanges(groupVisibleRanges);
+    if (this.gridHeight > GRID_SIZER_LIMIT) {
+      console.warn(
+        `\u26A0\uFE0F Virtual grid height (${this.gridHeight}px) exceeds safe scroll limit of ${GRID_SIZER_LIMIT}px. Scrolling may behave incorrectly on some browsers, especially mobile.`
+      );
+    }
     if (!this.gridSizingElement) {
       this.wrapperElement = document.createElement("div");
       this.wrapperElement.className = "gri4d-wrapper-element";
       this.wrapperElement.style.position = "relative";
       this.gridSizingElement = document.createElement("div");
       this.gridSizingElement.className = "gri4d-grid-sizing-element";
+      this.gridSizingElement.style.position = "relative";
       this.wrapperElement.appendChild(this.gridSizingElement);
       this.itemsViewportElement = document.createElement("div");
       this.itemsViewportElement.className = "gri4d-items-viewport-element";
@@ -105,10 +113,7 @@ var GRi4D = class {
     } else {
       this.wrapperElement.style = "position: relative";
     }
-    Object.assign(this.gridSizingElement.style, {
-      height: this.gridHeight + "px",
-      position: "relative"
-    });
+    this.gridSizingElement.style.height = `${Math.min(GRID_SIZER_LIMIT, this.gridHeight)}px`;
     Object.assign(this.itemsViewportElement.style, {
       width: "100%",
       overflow: "hidden",
@@ -203,6 +208,7 @@ var GRi4D = class {
       top = viewport.scrollTop;
       height = rect.bottom - rect.top;
     }
+    top *= this.scrollPosMultiplier;
     return { top, bottom: top + height };
   }
   getViewportRelativeTop() {
@@ -302,7 +308,8 @@ var GRi4D = class {
     const minY = vpRange.top - buffer;
     const maxY = vpRange.bottom + buffer;
     const topDiff = vpIsWindow ? Math.max(0, stickyTop - mountPoint.offsetTop) : 0;
-    const vpScrollAmount = Math.max(0, -top + stickyTop) - topDiff - (vpIsWindow ? 0 : stickyTop);
+    let vpScrollAmount = Math.max(0, -top + stickyTop) - topDiff - (vpIsWindow ? 0 : stickyTop);
+    vpScrollAmount *= this.scrollPosMultiplier;
     if (vpIsWindow) {
       const posStyle = itemsViewportElement.style.position;
       if (top <= 0 && posStyle !== "fixed") {
@@ -377,9 +384,9 @@ var GRi4D = class {
         itemsRowElement?.remove();
         renderedGroup.visibleItemsRows.delete(itemsRowIndex);
       }
+      let itemsRowY = firstVisibleItemsRowIndex * (rowHeight + spacing) + groupHeaderHeight + (groupHeaderHeight ? spacing : 0) + rawGroupTop - vpScrollAmount;
       for (let itemsRowIndex = firstVisibleItemsRowIndex; itemsRowIndex <= lastVisibleItemsRowIndex; itemsRowIndex++) {
         let itemsRowElement = renderedGroup.visibleItemsRows.get(itemsRowIndex);
-        const itemsRowY = itemsRowIndex * (rowHeight + spacing) + groupHeaderHeight + (groupHeaderHeight ? spacing : 0) + rawGroupTop - vpScrollAmount;
         if (!itemsRowElement) {
           itemsRowElement = this.createItemsRowElement(
             groupIndex,
@@ -389,6 +396,7 @@ var GRi4D = class {
           renderedGroup.visibleItemsRows.set(itemsRowIndex, itemsRowElement);
         }
         itemsRowElement.style.transform = `translateY(${itemsRowY}px)`;
+        itemsRowY += rowHeight + spacing;
       }
     }
   }
