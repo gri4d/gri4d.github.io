@@ -63,12 +63,16 @@
         viewport: window,
         mountPoint: document.getElementById("root"),
         groups,
-        numCols,
-        rowHeight,
-        groupHeaderHeight,
         spacing,
-        itemRenderer,
-        groupHeaderRenderer,
+        itemsRow: {
+          height: rowHeight,
+          columns: numCols,
+          renderer: itemRenderer,
+        },
+        groupHeader: {
+          height: groupHeaderHeight,
+          renderer: groupHeaderRenderer,
+        },
       });
     </script>
   </body>

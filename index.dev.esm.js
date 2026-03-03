@@ -41,6 +41,8 @@ var GRi4D = class {
   itemsViewportElement;
   visibleGroups = /* @__PURE__ */ new Map();
   groupVisibleRanges;
+  viewportSizeObserver = null;
+  gridHeight = 0;
   constructor(options) {
     this.reset(options);
   }
@@ -52,15 +54,15 @@ var GRi4D = class {
     };
     const {
       groups,
-      numCols,
-      groupHeaderHeight,
       spacing,
-      rowHeight,
+      itemsRow,
       viewport,
       mountPoint,
       stickyTop = 0
     } = this.options;
+    const { height: rowHeight, columns: numCols } = itemsRow;
     const vpIsWindow = this.getViewportType() === 0 /* Window */;
+    const topDiff = Math.max(0, stickyTop - mountPoint.offsetTop);
     const groupVisibleRanges = [];
     let y = 0;
     for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
@@ -72,7 +74,7 @@ var GRi4D = class {
       });
       y = bottom;
     }
-    const gridHeight = y > 0 ? y + spacing + (vpIsWindow ? 0 : stickyTop) : 0;
+    this.gridHeight = y > 0 ? y + spacing + (vpIsWindow ? topDiff : stickyTop) : 0;
     this.groupVisibleRanges = new VisibleRanges(groupVisibleRanges);
     if (!this.gridSizingElement) {
       this.wrapperElement = document.createElement("div");
@@ -104,13 +106,14 @@ var GRi4D = class {
       this.wrapperElement.style = "position: relative";
     }
     Object.assign(this.gridSizingElement.style, {
-      height: gridHeight + "px",
+      height: this.gridHeight + "px",
       position: "relative"
     });
     Object.assign(this.itemsViewportElement.style, {
+      width: "100%",
       overflow: "hidden",
       position: "sticky",
-      height: "100vh",
+      height: `100vh`,
       top: stickyTop + "px"
     });
     clearTimeout(this.resizeTimeout);
@@ -125,6 +128,18 @@ var GRi4D = class {
       this.visibleGroups.delete(groupKey);
     }
     this.itemsViewportElement.innerHTML = "";
+    this.viewportSizeObserver?.disconnect();
+    this.viewportSizeObserver = null;
+    if (!vpIsWindow) {
+      this.viewportSizeObserver = new ResizeObserver((entries) => {
+        const { stickyTop: stickyTop2, mountPoint: mountPoint2 } = this.options;
+        for (const entry of entries) {
+          this.itemsViewportElement.style.height = `calc(${entry.contentRect.height}px - ${stickyTop2}px)`;
+        }
+        this.update();
+      });
+      this.viewportSizeObserver.observe(scrollListener);
+    }
     this.update();
   }
   destroy() {
@@ -200,24 +215,27 @@ var GRi4D = class {
     return gridBoundRect.top - vpBoundRect.top;
   }
   getGroupTotalHeight(groupIndex) {
-    const { groups, numCols, groupHeaderHeight, spacing, rowHeight } = this.options;
+    const { groups, itemsRow, groupHeader, spacing } = this.options;
+    const { columns: numCols, height: rowHeight } = itemsRow;
+    const groupHeaderHeightWithSpacing = groupHeader ? groupHeader.height + spacing : 0;
     const group = groups[groupIndex];
     const groupNumRows = Math.ceil(group.items.length / numCols);
-    const groupTotalHeight = groupHeaderHeight + spacing + (rowHeight + spacing) * groupNumRows;
+    const groupTotalHeight = groupHeaderHeightWithSpacing + (rowHeight + spacing) * groupNumRows;
     return groupTotalHeight;
   }
   createGroupHeaderElement(groupIndex) {
     const { gridSizingElement } = this;
     const {
       groups,
-      numCols,
-      groupHeaderHeight,
+      groupHeader,
       spacing,
-      rowHeight,
-      groupHeaderRenderer,
       mountPoint,
       stickyTop = 0
     } = this.options;
+    if (!groupHeader) {
+      return null;
+    }
+    const { height: groupHeaderHeight, renderer: groupHeaderRenderer } = groupHeader;
     const group = groups[groupIndex];
     const groupStickyHeader = document.createElement("div");
     Object.assign(groupStickyHeader.style, {
@@ -231,15 +249,12 @@ var GRi4D = class {
   }
   createItemsRowElement(groupIndex, itemRowIndex) {
     const { gridSizingElement } = this;
+    const { groups, itemsRow, spacing, mountPoint } = this.options;
     const {
-      groups,
-      rowHeight,
-      groupHeaderHeight,
-      spacing,
-      numCols,
-      itemRenderer,
-      mountPoint
-    } = this.options;
+      height: rowHeight,
+      columns: numCols,
+      renderer: itemRenderer
+    } = itemsRow;
     const group = groups[groupIndex];
     const colWidthPx = `calc(${100 / numCols}% - ${spacing * ((numCols - 1) / numCols)}px)`;
     const itemsRowElement = document.createElement("div");
@@ -272,21 +287,30 @@ var GRi4D = class {
     const {
       mountPoint,
       groups,
-      rowHeight,
-      groupHeaderHeight,
+      groupHeader,
       spacing,
       stickyTop = 0,
       viewport,
-      numCols
+      itemsRow
     } = this.options;
+    const { height: rowHeight, columns: numCols } = itemsRow;
+    const groupHeaderHeight = groupHeader?.height || 0;
     const vpIsWindow = this.getViewportType() === 0 /* Window */;
     const buffer = Math.max(rowHeight, groupHeaderHeight) + spacing;
     const top = this.getViewportRelativeTop();
     const vpRange = this.getViewportRange();
     const minY = vpRange.top - buffer;
     const maxY = vpRange.bottom + buffer;
-    const topDiff = Math.max(0, stickyTop - mountPoint.offsetTop);
+    const topDiff = vpIsWindow ? Math.max(0, stickyTop - mountPoint.offsetTop) : 0;
     const vpScrollAmount = Math.max(0, -top + stickyTop) - topDiff - (vpIsWindow ? 0 : stickyTop);
+    if (vpIsWindow) {
+      const posStyle = itemsViewportElement.style.position;
+      if (top <= 0 && posStyle !== "fixed") {
+        itemsViewportElement.style.position = "fixed";
+      } else if (top > 0 && posStyle !== "sticky") {
+        itemsViewportElement.style.position = "sticky";
+      }
+    }
     const firstVisibleGroupIndex = this.groupVisibleRanges.findFirstVisibleIndex(minY);
     const lastVisibleGroupIndex = this.groupVisibleRanges.findLastVisibleIndex(maxY);
     for (const [groupIndex, visibleGroupContent] of this.visibleGroups) {
@@ -355,7 +379,7 @@ var GRi4D = class {
       }
       for (let itemsRowIndex = firstVisibleItemsRowIndex; itemsRowIndex <= lastVisibleItemsRowIndex; itemsRowIndex++) {
         let itemsRowElement = renderedGroup.visibleItemsRows.get(itemsRowIndex);
-        const itemsRowY = itemsRowIndex * (rowHeight + spacing) + groupHeaderHeight + spacing + rawGroupTop - vpScrollAmount;
+        const itemsRowY = itemsRowIndex * (rowHeight + spacing) + groupHeaderHeight + (groupHeaderHeight ? spacing : 0) + rawGroupTop - vpScrollAmount;
         if (!itemsRowElement) {
           itemsRowElement = this.createItemsRowElement(
             groupIndex,
