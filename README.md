@@ -20,7 +20,7 @@ It's based off japanese singing group GReeeeN (they are now called GRe4N Boyz).
 
 ## Demo
 
-<a href="https://gri4d.github.io/esm.html" target="_blank">Demo</a>
+<a href="https://gri4d.github.io/react" target="_blank">Demo</a>
 
 ## Install
 
