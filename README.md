@@ -33,7 +33,7 @@ It's based off japanese singing group GReeeeN (they are now called GRe4N Boyz).
 ### NPM
 
 ```
-npm i -S gri4d/griiiid
+npm i -S @gri4d/griiiid
 ```
 
 ## How to Use
